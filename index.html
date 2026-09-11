@@ -12,7 +12,6 @@
 <body>
   <header class="site-header">
     <div class="site-header__inner">
-      <p class="logo">VOICE JUDGE</p>
       <h1 class="site-title">地声・裏声 判定</h1>
       <p class="tagline">声をスペクトラム解析して、地声か裏声かを判定します</p>
     </div>
@@ -68,23 +67,19 @@
           <div class="card feature">
             <h3 class="feature-name"><span class="en">PITCH</span>ピッチ（中央値）</h3>
             <p id="featF0" class="feature-value">–</p>
-            <p class="feature-desc">声の高さ</p>
           </div>
           <div class="card feature">
             <h3 class="feature-name"><span class="en">H1 − H2</span>基音と第2倍音の差</h3>
             <p id="featH1H2" class="feature-value">–</p>
             <p id="featH1H2c" class="feature-sub" hidden></p>
-            <p class="feature-desc">大きいほど裏声寄り</p>
           </div>
           <div class="card feature">
             <h3 class="feature-name"><span class="en">HARMONICS</span>倍音豊富度</h3>
             <p id="featHrf" class="feature-value">–</p>
-            <p class="feature-desc">基音に対する上の倍音の強さ。小さいほど裏声寄り</p>
           </div>
           <div class="card feature">
             <h3 class="feature-name"><span class="en">SLOPE</span>スペクトル傾斜</h3>
             <p id="featSlope" class="feature-value">–</p>
-            <p class="feature-desc">高い倍音ほど弱まる度合い。急なほど裏声寄り</p>
           </div>
         </div>
       </div>
@@ -119,13 +114,6 @@
       </div>
     </section>
   </main>
-
-  <footer class="site-footer">
-    <div class="site-footer__inner">
-      <p class="footer-logo">VOICE JUDGE</p>
-      <p class="footer-note">判定は倍音構造（基音と倍音の強さのバランス）にもとづく推定です。母音・声質・録音環境によって誤判定することがあります。</p>
-    </div>
-  </footer>
 
   <script src="js/analyzer.js"></script>
   <script src="js/spectrogram.js"></script>

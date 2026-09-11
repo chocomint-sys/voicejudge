@@ -62,37 +62,12 @@ p { margin: 0; }
   text-align: center;
 }
 
-.logo {
-  position: relative;
-  display: inline-block;
-  padding: 10px 44px;
-  border: 2px solid var(--ink);
-  font-family: var(--font-en);
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.4;
-  letter-spacing: 0.24em;
-  color: var(--ink);
-}
-
-/* ずらした線を重ねたロゴ枠 */
-.logo::after {
-  content: "";
-  position: absolute;
-  top: 7px;
-  left: 7px;
-  right: -9px;
-  bottom: -9px;
-  border-right: 2px solid var(--ink);
-  border-bottom: 2px solid var(--ink);
-  pointer-events: none;
-}
-
 .site-title {
-  margin: 22px 0 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: var(--ink);
 }
 
 .tagline {
@@ -429,22 +404,6 @@ p { margin: 0; }
   font-weight: 700;
 }
 
-.feature-desc {
-  margin-top: auto;
-  padding-top: 12px;
-  font-size: 0.72rem;
-  line-height: 1.6;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-
-.feature-desc::before {
-  content: "";
-  display: block;
-  margin-bottom: 10px;
-  border-top: 1px solid var(--line-soft);
-}
-
 /* ------------------------------------------------------------ spectrogram */
 
 .spec-controls {
@@ -561,37 +520,6 @@ p { margin: 0; }
   color: var(--text-muted);
 }
 
-/* ------------------------------------------------------------ footer */
-
-.site-footer {
-  background: var(--ink);
-  color: #fff;
-}
-
-.site-footer__inner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 40px;
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 30px 20px;
-}
-
-.footer-logo {
-  font-family: var(--font-en);
-  font-weight: 700;
-  letter-spacing: 0.24em;
-}
-
-.footer-note {
-  max-width: 640px;
-  font-size: 0.75rem;
-  letter-spacing: 0.06em;
-  color: #bdbdc4;
-}
-
 /* ------------------------------------------------------------ narrow screens */
 
 @media (max-width: 900px) {
@@ -600,7 +528,7 @@ p { margin: 0; }
 
 @media (max-width: 640px) {
   .site-header__inner { padding: 30px 16px 24px; }
-  .logo { padding: 8px 26px; font-size: 1rem; }
+  .site-title { font-size: 1.3rem; }
   .page { padding: 32px 16px 56px; }
   .section + .section { margin-top: 44px; }
   .panel { padding: 16px; }

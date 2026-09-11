@@ -44,16 +44,16 @@
     labels: LABELS,
   });
 
-  let audioCtx = null;
   let recorder = null;
   let meterRaf = 0;
   let playbackBuffer = null;
   let playing = null;
   let busy = false;
 
-  function getAudioContext() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    return audioCtx;
+  // デコードは出力デバイスを開かない OfflineAudioContext で行う
+  function decodeAudio(data) {
+    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    return new Offline(1, 1, 44100).decodeAudioData(data);
   }
 
   function showMessage(text, kind) {
@@ -172,7 +172,7 @@
     }
     stopPlayback();
     showMessage('');
-    const rec = new MicRecorder(getAudioContext());
+    const rec = new MicRecorder();
     recorder = rec;
     els.recordBtn.disabled = true;
     try {
@@ -232,7 +232,7 @@
     showMessage(`「${file.name}」を読み込み中…`);
     try {
       const data = await file.arrayBuffer();
-      const buffer = await getAudioContext().decodeAudioData(data);
+      const buffer = await decodeAudio(data);
       await analyzeBuffer(buffer);
     } catch (err) {
       console.error(err);
@@ -269,7 +269,8 @@
 
   function startPlayback() {
     if (!playbackBuffer || !view.result) return;
-    const ctx = getAudioContext();
+    // 再生のたびにコンテキストを作り、終わったら閉じる
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
     ctx.resume();
     const source = ctx.createBufferSource();
     source.buffer = playbackBuffer;
@@ -280,7 +281,7 @@
     source.onended = () => {
       if (playing && playing.source === source) stopPlayback();
     };
-    playing = { source, raf: 0 };
+    playing = { ctx, source, raf: 0 };
     els.playBtn.textContent = '■ 停止';
     const tick = () => {
       if (!playing || playing.source !== source) return;
@@ -292,7 +293,7 @@
 
   function stopPlayback() {
     if (!playing) return;
-    const { source, raf } = playing;
+    const { ctx, source, raf } = playing;
     playing = null;
     source.onended = null;
     try {
@@ -301,6 +302,7 @@
       /* already stopped */
     }
     cancelAnimationFrame(raf);
+    ctx.close().catch(() => {});
     view.setPlayhead(null);
     els.playBtn.textContent = '▶ 再生';
   }

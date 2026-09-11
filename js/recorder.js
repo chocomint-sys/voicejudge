@@ -1,6 +1,10 @@
 /*
  * MicRecorder — マイク入力を PCM のまま録音する
  * （エコーキャンセル・ノイズ抑制・自動ゲインはスペクトルを歪めるので無効化）
+ *
+ * 録音のたびに専用の AudioContext を作り、終了時に必ず閉じる。
+ * マイクにつないだコンテキストを開いたままにすると、Bluetooth ヘッドセットなどが
+ * 通話モードのまま戻らず、他のメディア音声が鳴らなくなることがあるため。
  */
 (function (root) {
   'use strict';
@@ -20,9 +24,18 @@
     registerProcessor('capture-processor', CaptureProcessor);
   `;
 
+  // Safari の Audio Session API（対応ブラウザのみ）
+  function setAudioSession(type) {
+    try {
+      if (navigator.audioSession) navigator.audioSession.type = type;
+    } catch (_) {
+      /* unsupported */
+    }
+  }
+
   class MicRecorder {
-    constructor(audioContext) {
-      this.ctx = audioContext;
+    constructor() {
+      this.ctx = null;
       this.chunks = [];
       this.length = 0;
       this.nodes = [];
@@ -32,11 +45,13 @@
     }
 
     async start() {
+      setAudioSession('play-and-record');
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
-      await this.ctx.resume();
-      const ctx = this.ctx;
+      const ctx = new (root.AudioContext || root.webkitAudioContext)();
+      this.ctx = ctx;
+      await ctx.resume();
       const source = ctx.createMediaStreamSource(this.stream);
       const mute = ctx.createGain();
       mute.gain.value = 0;
@@ -55,11 +70,11 @@
       let capture;
       try {
         if (!ctx.audioWorklet) throw new Error('AudioWorklet unsupported');
-        if (!MicRecorder.workletLoaded) {
-          const url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }));
+        const url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }));
+        try {
           await ctx.audioWorklet.addModule(url);
+        } finally {
           URL.revokeObjectURL(url);
-          MicRecorder.workletLoaded = true;
         }
         capture = new AudioWorkletNode(ctx, 'capture-processor');
         capture.port.onmessage = (e) => push(e.data);
@@ -94,18 +109,25 @@
       return 10 * Math.log10(sum / this.levelBuffer.length + 1e-12);
     }
 
-    // 録音を終了し、モノラルの AudioBuffer を返す（何も録れていなければ null）
+    // 録音を終了してマイクとコンテキストを解放し、モノラルの AudioBuffer を返す（何も録れていなければ null）
     stop() {
-      this.release();
-      if (this.length === 0) return null;
-      const buffer = this.ctx.createBuffer(1, this.length, this.ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      let offset = 0;
-      for (const chunk of this.chunks) {
-        data.set(chunk, offset);
-        offset += chunk.length;
+      let buffer = null;
+      if (this.length > 0 && this.ctx) {
+        const sampleRate = this.ctx.sampleRate;
+        try {
+          buffer = new AudioBuffer({ length: this.length, numberOfChannels: 1, sampleRate });
+        } catch (_) {
+          buffer = this.ctx.createBuffer(1, this.length, sampleRate);
+        }
+        const data = buffer.getChannelData(0);
+        let offset = 0;
+        for (const chunk of this.chunks) {
+          data.set(chunk, offset);
+          offset += chunk.length;
+        }
       }
       this.chunks = [];
+      this.release();
       return buffer;
     }
 
@@ -115,9 +137,11 @@
       this.analyser = null;
       if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
+      if (this.ctx && this.ctx.state !== 'closed') this.ctx.close().catch(() => {});
+      this.ctx = null;
+      setAudioSession('auto');
     }
   }
 
-  MicRecorder.workletLoaded = false;
   root.MicRecorder = MicRecorder;
 })(window);
