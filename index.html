@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>地声・裏声 判定</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <h1>地声・裏声 判定</h1>
+      <p>声をスペクトラム解析して、地声か裏声かを推定します。</p>
+    </header>
+
+    <section id="inputCard" class="card input-card">
+      <div class="input-row">
+        <button id="recordBtn" class="btn btn-record" type="button">
+          <span class="rec-dot" aria-hidden="true"></span><span id="recordLabel">録音する</span>
+        </button>
+        <span class="or">または</span>
+        <label id="fileBtn" class="btn btn-secondary">
+          音声ファイルを選択
+          <input id="fileInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.oga,.webm,.flac" hidden>
+        </label>
+      </div>
+      <div id="recStatus" class="rec-status" hidden>
+        <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
+        <span id="recTime" class="rec-time">0.0 秒</span>
+      </div>
+      <p class="hint">伴奏のない声で、「あー」などの母音を 2〜5 秒ほど伸ばして発声してください（最長 30 秒）。ファイルはドラッグ＆ドロップでも読み込めます。</p>
+      <p id="message" class="message" role="status" hidden></p>
+    </section>
+
+    <section id="resultCard" class="card result-card" hidden>
+      <div class="verdict">
+        <div class="verdict-main">
+          <span class="eyebrow">判定結果</span>
+          <div id="verdictLabel" class="verdict-label"></div>
+        </div>
+        <div class="verdict-detail">
+          <div class="ratio-bar" aria-hidden="true">
+            <div id="ratioChest" class="ratio-seg chest-bg"></div>
+            <div id="ratioFalsetto" class="ratio-seg falsetto-bg"></div>
+          </div>
+          <div class="ratio-legend">
+            <span><i class="swatch chest-bg"></i>地声 <b id="pctChest">–</b></span>
+            <span><i class="swatch falsetto-bg"></i>裏声 <b id="pctFalsetto">–</b></span>
+          </div>
+          <p id="verdictNote" class="verdict-note"></p>
+        </div>
+      </div>
+      <dl class="features">
+        <div class="feature">
+          <dt>ピッチ（中央値）</dt>
+          <dd id="featF0">–</dd>
+          <small>声の高さ</small>
+        </div>
+        <div class="feature">
+          <dt>H1−H2</dt>
+          <dd id="featH1H2">–</dd>
+          <small id="featH1H2c" class="feature-sub" hidden></small>
+          <small>基音と第2倍音の差。大きいほど裏声寄り</small>
+        </div>
+        <div class="feature">
+          <dt>倍音豊富度</dt>
+          <dd id="featHrf">–</dd>
+          <small>基音に対する上の倍音の強さ。小さいほど裏声寄り</small>
+        </div>
+        <div class="feature">
+          <dt>スペクトル傾斜</dt>
+          <dd id="featSlope">–</dd>
+          <small>高い倍音ほど弱まる度合い。急なほど裏声寄り</small>
+        </div>
+      </dl>
+    </section>
+
+    <section id="specCard" class="card spec-card" hidden>
+      <div class="spec-toolbar">
+        <h2>スペクトログラム</h2>
+        <div class="spec-controls">
+          <button id="playBtn" class="btn btn-small" type="button">▶ 再生</button>
+          <label class="control">表示上限
+            <select id="maxFreq">
+              <option value="2500">2.5 kHz</option>
+              <option value="5000" selected>5 kHz</option>
+              <option value="8000">8 kHz</option>
+              <option value="11025">11 kHz</option>
+            </select>
+          </label>
+          <label class="control check"><input id="showPitch" type="checkbox"> ピッチ線</label>
+        </div>
+      </div>
+      <div id="specWrap" class="spec-wrap">
+        <canvas id="specCanvas"></canvas>
+        <canvas id="specOverlay" class="spec-overlay"></canvas>
+        <div id="tooltip" class="tooltip" hidden></div>
+      </div>
+      <p class="hint">カーソルを当てると時間と周波数を表示します。下の帯は時間ごとの判定です（<i class="swatch chest-bg"></i>地声 <i class="swatch falsetto-bg"></i>裏声）。</p>
+    </section>
+
+    <footer class="footer">
+      判定は倍音構造（基音と倍音の強さのバランス）にもとづく推定です。母音・声質・録音環境によって誤判定することがあります。
+    </footer>
+  </main>
+
+  <script src="js/analyzer.js"></script>
+  <script src="js/spectrogram.js"></script>
+  <script src="js/recorder.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
