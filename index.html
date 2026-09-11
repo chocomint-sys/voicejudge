@@ -4,105 +4,128 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>地声・裏声 判定</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="logo">VOICE JUDGE</p>
+      <h1 class="site-title">地声・裏声 判定</h1>
+      <p class="tagline">声をスペクトラム解析して、地声か裏声かを判定します</p>
+    </div>
+  </header>
+
   <main class="page">
-    <header class="masthead">
-      <h1>地声・裏声 判定</h1>
-      <p>声をスペクトラム解析して、地声か裏声かを推定します。</p>
-    </header>
-
-    <section id="inputCard" class="card input-card">
-      <div class="input-row">
-        <button id="recordBtn" class="btn btn-record" type="button">
-          <span class="rec-dot" aria-hidden="true"></span><span id="recordLabel">録音する</span>
-        </button>
-        <span class="or">または</span>
-        <label id="fileBtn" class="btn btn-secondary">
-          音声ファイルを選択
-          <input id="fileInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.oga,.webm,.flac" hidden>
-        </label>
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title"><span class="en">RECORD</span><span class="ja">音声の入力</span></h2>
       </div>
-      <div id="recStatus" class="rec-status" hidden>
-        <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
-        <span id="recTime" class="rec-time">0.0 秒</span>
-      </div>
-      <p class="hint">伴奏のない声で、「あー」などの母音を 2〜5 秒ほど伸ばして発声してください（最長 30 秒）。ファイルはドラッグ＆ドロップでも読み込めます。</p>
-      <p id="message" class="message" role="status" hidden></p>
-    </section>
-
-    <section id="resultCard" class="card result-card" hidden>
-      <div class="verdict">
-        <div class="verdict-main">
-          <span class="eyebrow">判定結果</span>
-          <div id="verdictLabel" class="verdict-label"></div>
-        </div>
-        <div class="verdict-detail">
-          <div class="ratio-bar" aria-hidden="true">
-            <div id="ratioChest" class="ratio-seg chest-bg"></div>
-            <div id="ratioFalsetto" class="ratio-seg falsetto-bg"></div>
-          </div>
-          <div class="ratio-legend">
-            <span><i class="swatch chest-bg"></i>地声 <b id="pctChest">–</b></span>
-            <span><i class="swatch falsetto-bg"></i>裏声 <b id="pctFalsetto">–</b></span>
-          </div>
-          <p id="verdictNote" class="verdict-note"></p>
-        </div>
-      </div>
-      <dl class="features">
-        <div class="feature">
-          <dt>ピッチ（中央値）</dt>
-          <dd id="featF0">–</dd>
-          <small>声の高さ</small>
-        </div>
-        <div class="feature">
-          <dt>H1−H2</dt>
-          <dd id="featH1H2">–</dd>
-          <small id="featH1H2c" class="feature-sub" hidden></small>
-          <small>基音と第2倍音の差。大きいほど裏声寄り</small>
-        </div>
-        <div class="feature">
-          <dt>倍音豊富度</dt>
-          <dd id="featHrf">–</dd>
-          <small>基音に対する上の倍音の強さ。小さいほど裏声寄り</small>
-        </div>
-        <div class="feature">
-          <dt>スペクトル傾斜</dt>
-          <dd id="featSlope">–</dd>
-          <small>高い倍音ほど弱まる度合い。急なほど裏声寄り</small>
-        </div>
-      </dl>
-    </section>
-
-    <section id="specCard" class="card spec-card" hidden>
-      <div class="spec-toolbar">
-        <h2>スペクトログラム</h2>
-        <div class="spec-controls">
-          <button id="playBtn" class="btn btn-small" type="button">▶ 再生</button>
-          <label class="control">表示上限
-            <select id="maxFreq">
-              <option value="2500">2.5 kHz</option>
-              <option value="5000" selected>5 kHz</option>
-              <option value="8000">8 kHz</option>
-              <option value="11025">11 kHz</option>
-            </select>
+      <div id="inputCard" class="panel input-panel">
+        <div class="input-row">
+          <button id="recordBtn" class="btn btn-primary btn-record" type="button">
+            <span class="rec-dot" aria-hidden="true"></span><span id="recordLabel">録音</span>
+          </button>
+          <label id="fileBtn" class="btn btn-outline">
+            <span>音声ファイルを選択</span><span class="arrow" aria-hidden="true">→</span>
+            <input id="fileInput" class="visually-hidden" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.oga,.webm,.flac">
           </label>
-          <label class="control check"><input id="showPitch" type="checkbox"> ピッチ線</label>
         </div>
+        <div id="recStatus" class="rec-status" hidden>
+          <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
+          <span id="recTime" class="rec-time">0.0 秒</span>
+        </div>
+        <p id="message" class="message" role="status" hidden></p>
       </div>
-      <div id="specWrap" class="spec-wrap">
-        <canvas id="specCanvas"></canvas>
-        <canvas id="specOverlay" class="spec-overlay"></canvas>
-        <div id="tooltip" class="tooltip" hidden></div>
-      </div>
-      <p class="hint">カーソルを当てると時間と周波数を表示します。下の帯は時間ごとの判定です（<i class="swatch chest-bg"></i>地声 <i class="swatch falsetto-bg"></i>裏声）。</p>
     </section>
 
-    <footer class="footer">
-      判定は倍音構造（基音と倍音の強さのバランス）にもとづく推定です。母音・声質・録音環境によって誤判定することがあります。
-    </footer>
+    <section id="resultCard" class="section" hidden>
+      <div class="section-head">
+        <h2 class="section-title"><span class="en">RESULT</span><span class="ja">判定結果</span></h2>
+      </div>
+      <div class="panel">
+        <div class="card verdict">
+          <div class="verdict-main">
+            <p id="verdictEn" class="verdict-en"></p>
+            <p id="verdictLabel" class="verdict-label"></p>
+          </div>
+          <div class="verdict-detail">
+            <div class="ratio-legend">
+              <span><i class="swatch chest-bg"></i>地声<b id="pctChest">–</b></span>
+              <span><i class="swatch falsetto-bg"></i>裏声<b id="pctFalsetto">–</b></span>
+            </div>
+            <div class="ratio-bar" aria-hidden="true">
+              <div id="ratioChest" class="ratio-seg chest-bg"></div>
+              <div id="ratioFalsetto" class="ratio-seg falsetto-bg"></div>
+            </div>
+            <p id="verdictNote" class="verdict-note"></p>
+          </div>
+        </div>
+
+        <div class="features">
+          <div class="card feature">
+            <h3 class="feature-name"><span class="en">PITCH</span>ピッチ（中央値）</h3>
+            <p id="featF0" class="feature-value">–</p>
+            <p class="feature-desc">声の高さ</p>
+          </div>
+          <div class="card feature">
+            <h3 class="feature-name"><span class="en">H1 − H2</span>基音と第2倍音の差</h3>
+            <p id="featH1H2" class="feature-value">–</p>
+            <p id="featH1H2c" class="feature-sub" hidden></p>
+            <p class="feature-desc">大きいほど裏声寄り</p>
+          </div>
+          <div class="card feature">
+            <h3 class="feature-name"><span class="en">HARMONICS</span>倍音豊富度</h3>
+            <p id="featHrf" class="feature-value">–</p>
+            <p class="feature-desc">基音に対する上の倍音の強さ。小さいほど裏声寄り</p>
+          </div>
+          <div class="card feature">
+            <h3 class="feature-name"><span class="en">SLOPE</span>スペクトル傾斜</h3>
+            <p id="featSlope" class="feature-value">–</p>
+            <p class="feature-desc">高い倍音ほど弱まる度合い。急なほど裏声寄り</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="specCard" class="section" hidden>
+      <div class="section-head">
+        <h2 class="section-title"><span class="en">SPECTROGRAM</span><span class="ja">スペクトログラム</span></h2>
+        <div class="spec-controls">
+          <button id="playBtn" class="btn btn-primary btn-small" type="button">▶ 再生</button>
+          <div class="control">
+            <span id="freqLabel" class="control-label">表示上限</span>
+            <div class="segmented" role="group" aria-labelledby="freqLabel">
+              <button type="button" class="seg-btn" data-freq="2500" aria-pressed="false">2.5k</button>
+              <button type="button" class="seg-btn" data-freq="5000" aria-pressed="true">5k</button>
+              <button type="button" class="seg-btn" data-freq="8000" aria-pressed="false">8k</button>
+              <button type="button" class="seg-btn" data-freq="11025" aria-pressed="false">11k</button>
+            </div>
+          </div>
+          <button id="pitchToggle" class="btn btn-outline btn-small" type="button" aria-pressed="false">ピッチ線</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="card spec-card">
+          <div id="specWrap" class="spec-wrap">
+            <canvas id="specCanvas"></canvas>
+            <canvas id="specOverlay" class="spec-overlay"></canvas>
+            <div id="tooltip" class="tooltip" hidden></div>
+          </div>
+        </div>
+        <p class="spec-legend">カーソルを当てると時間と周波数を表示します。下の帯は時間ごとの判定です（<i class="swatch chest-bg"></i>地声 <i class="swatch falsetto-bg"></i>裏声）。</p>
+      </div>
+    </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p class="footer-logo">VOICE JUDGE</p>
+      <p class="footer-note">判定は倍音構造（基音と倍音の強さのバランス）にもとづく推定です。母音・声質・録音環境によって誤判定することがあります。</p>
+    </div>
+  </footer>
 
   <script src="js/analyzer.js"></script>
   <script src="js/spectrogram.js"></script>

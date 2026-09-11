@@ -224,7 +224,7 @@
 
       // 軸ラベル
       ctx.fillStyle = textColor;
-      ctx.font = '11px system-ui, -apple-system, "Segoe UI", sans-serif';
+      ctx.font = '500 11px Montserrat, system-ui, -apple-system, "Segoe UI", sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       for (let f = fStep; f <= this.maxFreq + 1e-6; f += fStep) {

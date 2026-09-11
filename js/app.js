@@ -18,6 +18,7 @@
     recTime: $('recTime'),
     message: $('message'),
     resultCard: $('resultCard'),
+    verdictEn: $('verdictEn'),
     verdictLabel: $('verdictLabel'),
     ratioChest: $('ratioChest'),
     ratioFalsetto: $('ratioFalsetto'),
@@ -31,8 +32,8 @@
     featSlope: $('featSlope'),
     specCard: $('specCard'),
     playBtn: $('playBtn'),
-    maxFreq: $('maxFreq'),
-    showPitch: $('showPitch'),
+    freqButtons: document.querySelectorAll('.seg-btn[data-freq]'),
+    pitchToggle: $('pitchToggle'),
   };
 
   const view = new SpectrogramView({
@@ -65,6 +66,7 @@
     busy = value;
     els.recordBtn.disabled = value;
     els.fileBtn.classList.toggle('disabled', value);
+    els.fileInput.disabled = value;
   }
 
   const nextPaint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
@@ -105,7 +107,7 @@
 
   function leanTag(leaning) {
     if (!leaning) return '';
-    return `<span class="lean ${leaning}">${LABELS[leaning]}寄り</span>`;
+    return `<span class="lean ${leaning}">#${LABELS[leaning]}寄り</span>`;
   }
 
   function formatFeature(value, unit, leaning) {
@@ -119,6 +121,7 @@
     els.specCard.hidden = false;
 
     if (!s.label) {
+      els.verdictEn.textContent = 'NO RESULT';
       els.verdictLabel.textContent = '判定できません';
       els.verdictLabel.className = 'verdict-label unknown';
       els.ratioChest.style.width = '0%';
@@ -130,6 +133,7 @@
       els.featH1H2c.hidden = true;
     } else {
       const falsettoPct = Math.round(s.falsettoRatio * 100);
+      els.verdictEn.textContent = s.label === 'falsetto' ? 'FALSETTO' : 'CHEST VOICE';
       els.verdictLabel.textContent = LABELS[s.label];
       els.verdictLabel.className = `verdict-label ${s.label}`;
       els.ratioChest.style.width = `${100 - falsettoPct}%`;
@@ -184,6 +188,7 @@
     els.recordBtn.classList.add('recording');
     els.recordLabel.textContent = '停止して判定';
     els.fileBtn.classList.add('disabled');
+    els.fileInput.disabled = true;
     els.recStatus.hidden = false;
 
     const tick = () => {
@@ -202,8 +207,9 @@
     const buffer = recorder.stop();
     recorder = null;
     els.recordBtn.classList.remove('recording');
-    els.recordLabel.textContent = '録音する';
+    els.recordLabel.textContent = '録音';
     els.fileBtn.classList.remove('disabled');
+    els.fileInput.disabled = false;
     els.recStatus.hidden = true;
     els.meterFill.style.width = '0%';
     if (!buffer || buffer.duration < 0.3) {
@@ -303,6 +309,19 @@
 
   // ------------------------------------------------------------ spectrogram controls
 
-  els.maxFreq.addEventListener('change', () => view.setMaxFreq(Number(els.maxFreq.value)));
-  els.showPitch.addEventListener('change', () => view.setShowPitch(els.showPitch.checked));
+  for (const btn of els.freqButtons) {
+    btn.addEventListener('click', () => {
+      for (const b of els.freqButtons) b.setAttribute('aria-pressed', String(b === btn));
+      view.setMaxFreq(Number(btn.dataset.freq));
+    });
+  }
+
+  els.pitchToggle.addEventListener('click', () => {
+    const show = els.pitchToggle.getAttribute('aria-pressed') !== 'true';
+    els.pitchToggle.setAttribute('aria-pressed', String(show));
+    view.setShowPitch(show);
+  });
+
+  // Web フォントの読み込み後に軸ラベルを描き直す
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => view.render());
 })();
