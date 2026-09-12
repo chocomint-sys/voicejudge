@@ -398,12 +398,6 @@ p { margin: 0; }
 .lean.chest { color: var(--chest); }
 .lean.falsetto { color: var(--falsetto); }
 
-.feature-sub {
-  margin-top: 6px;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
-
 /* ------------------------------------------------------------ spectrogram */
 
 .spec-controls {

@@ -26,10 +26,9 @@
     pctFalsetto: $('pctFalsetto'),
     verdictNote: $('verdictNote'),
     featF0: $('featF0'),
-    featH1H2: $('featH1H2'),
-    featH1H2c: $('featH1H2c'),
+    featCpp: $('featCpp'),
+    featHnr: $('featHnr'),
     featHrf: $('featHrf'),
-    featSlope: $('featSlope'),
     specCard: $('specCard'),
     playBtn: $('playBtn'),
     freqButtons: document.querySelectorAll('.seg-btn[data-freq]'),
@@ -96,7 +95,12 @@
       const result = VoiceAnalyzer.analyze(samples, TARGET_SAMPLE_RATE);
       playbackBuffer = buffer;
       showResult(result);
-      showMessage(buffer.duration > MAX_ANALYZE_SEC ? `先頭の ${MAX_ANALYZE_SEC} 秒を解析しました。` : '');
+      const notes = [];
+      if (buffer.duration > MAX_ANALYZE_SEC) notes.push(`先頭の ${MAX_ANALYZE_SEC} 秒を解析しました。`);
+      if (result.summary.narrowband) {
+        notes.push('通話用の音質（高い音域が欠けた音声）で録音されたようです。裏声寄りに誤判定しやすいので、Bluetooth イヤホンではなく本体のマイクか有線マイクで録音してください。');
+      }
+      showMessage(notes.join(' '));
     } catch (err) {
       console.error(err);
       showMessage(`解析に失敗しました（${err.message}）`, 'error');
@@ -129,8 +133,7 @@
       els.pctChest.textContent = '–';
       els.pctFalsetto.textContent = '–';
       els.verdictNote.textContent = '声（音程のある音）を十分に検出できませんでした。マイクに近づいて、はっきり発声してください。';
-      for (const el of [els.featF0, els.featH1H2, els.featHrf, els.featSlope]) el.textContent = '–';
-      els.featH1H2c.hidden = true;
+      for (const el of [els.featF0, els.featCpp, els.featHnr, els.featHrf]) el.textContent = '–';
     } else {
       const falsettoPct = Math.round(s.falsettoRatio * 100);
       els.verdictEn.textContent = s.label === 'falsetto' ? 'FALSETTO' : 'CHEST VOICE';
@@ -143,12 +146,9 @@
       const majorityPct = s.label === 'falsetto' ? falsettoPct : 100 - falsettoPct;
       els.verdictNote.textContent = `声を検出した ${s.voicedSeconds.toFixed(1)} 秒のうち ${majorityPct}% が${LABELS[s.label]}と判定されました。`;
       els.featF0.textContent = `${s.medianF0.toFixed(0)} Hz（${s.note}）`;
-      els.featH1H2.innerHTML = formatFeature(s.features.h1h2, 'dB', s.leaning.h1h2);
-      const showCorrected = s.formantCorrected && Number.isFinite(s.features.h1h2c);
-      els.featH1H2c.textContent = showCorrected ? `フォルマント補正後 ${s.features.h1h2c.toFixed(1)} dB` : '';
-      els.featH1H2c.hidden = !showCorrected;
+      els.featCpp.innerHTML = formatFeature(s.features.cpp, 'dB', s.leaning.cpp);
+      els.featHnr.innerHTML = formatFeature(s.features.hnr, 'dB', s.leaning.hnr);
       els.featHrf.innerHTML = formatFeature(s.features.hrf, 'dB', s.leaning.hrf);
-      els.featSlope.innerHTML = formatFeature(s.features.slope, 'dB/oct', s.leaning.slope);
     }
 
     view.setResult(result);
