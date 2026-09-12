@@ -13,6 +13,8 @@
     recordLabel: $('recordLabel'),
     fileBtn: $('fileBtn'),
     fileInput: $('fileInput'),
+    micRow: $('micRow'),
+    micSelect: $('micSelect'),
     recStatus: $('recStatus'),
     meterFill: $('meterFill'),
     recTime: $('recTime'),
@@ -48,6 +50,8 @@
   let playbackBuffer = null;
   let playing = null;
   let busy = false;
+  let micChoice = '';
+  let recordingNote = '';
 
   // デコードは出力デバイスを開かない OfflineAudioContext で行う
   function decodeAudio(data) {
@@ -96,6 +100,10 @@
       playbackBuffer = buffer;
       showResult(result);
       const notes = [];
+      if (recordingNote) {
+        notes.push(recordingNote);
+        recordingNote = '';
+      }
       if (buffer.duration > MAX_ANALYZE_SEC) notes.push(`先頭の ${MAX_ANALYZE_SEC} 秒を解析しました。`);
       if (result.summary.narrowband) {
         notes.push('通話用の音質（高い音域が欠けた音声）で録音されたようです。裏声寄りに誤判定しやすいので、Bluetooth イヤホンではなく本体のマイクか有線マイクで録音してください。');
@@ -176,7 +184,7 @@
     recorder = rec;
     els.recordBtn.disabled = true;
     try {
-      await rec.start();
+      await rec.start(els.micSelect.value || undefined);
     } catch (err) {
       rec.release();
       recorder = null;
@@ -190,6 +198,10 @@
     els.fileBtn.classList.add('disabled');
     els.fileInput.disabled = true;
     els.recStatus.hidden = false;
+    refreshMicList();
+    if (rec.bluetooth) {
+      showMessage('Bluetooth のマイクで録音しています。通話モードに切り替わるため音質が下がり、録音後に他の音が出なくなることがあります。マイクの選択欄で本体のマイクを選ぶと避けられます。');
+    }
 
     const tick = () => {
       if (recorder !== rec) return;
@@ -204,7 +216,11 @@
 
   function finishRecording() {
     cancelAnimationFrame(meterRaf);
+    const usedBluetooth = recorder.bluetooth;
     const buffer = recorder.stop();
+    recordingNote = usedBluetooth
+      ? 'Bluetooth のマイクで録音しました。録音後に音が聞こえない場合は、イヤホンを接続し直すか、Windows の再生デバイスを選び直してください。'
+      : '';
     recorder = null;
     els.recordBtn.classList.remove('recording');
     els.recordLabel.textContent = '録音';
@@ -323,6 +339,43 @@
     els.pitchToggle.setAttribute('aria-pressed', String(show));
     view.setShowPitch(show);
   });
+
+  // ------------------------------------------------------------ マイクの選択
+
+  async function refreshMicList() {
+    let inputs = [];
+    try {
+      inputs = await MicRecorder.listInputs();
+    } catch (_) {
+      return;
+    }
+    const labelled = inputs.filter((d) => d.label);
+    if (!labelled.length) {
+      els.micRow.hidden = true;
+      return;
+    }
+    els.micSelect.innerHTML = '';
+    for (const device of labelled) {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label + (MicRecorder.isBluetooth(device.label) ? '（Bluetooth）' : '');
+      els.micSelect.appendChild(option);
+    }
+    // 選択がなければ Bluetooth 以外のマイクを優先する（通話モードへの切り替わりを避けるため）
+    const wired = labelled.find((d) => !MicRecorder.isBluetooth(d.label));
+    const chosen = labelled.some((d) => d.deviceId === micChoice) ? micChoice : (wired || labelled[0]).deviceId;
+    els.micSelect.value = chosen;
+    els.micRow.hidden = labelled.length < 2;
+  }
+
+  els.micSelect.addEventListener('change', () => {
+    micChoice = els.micSelect.value;
+  });
+
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', refreshMicList);
+  }
+  refreshMicList();
 
   // Web フォントの読み込み後に軸ラベルを描き直す
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => view.render());

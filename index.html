@@ -32,6 +32,10 @@
             <input id="fileInput" class="visually-hidden" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.oga,.webm,.flac">
           </label>
         </div>
+        <div id="micRow" class="mic-row" hidden>
+          <label class="control-label" for="micSelect">マイク</label>
+          <select id="micSelect" class="mic-select"></select>
+        </div>
         <div id="recStatus" class="rec-status" hidden>
           <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
           <span id="recTime" class="rec-time">0.0 秒</span>

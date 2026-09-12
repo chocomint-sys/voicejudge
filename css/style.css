@@ -534,3 +534,23 @@ p { margin: 0; }
   .spec-card { padding: 12px 8px 8px 0; }
   .spec-wrap { height: 300px; }
 }
+
+.mic-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mic-select {
+  flex: 1;
+  min-width: 0;
+  max-width: 440px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ink);
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
