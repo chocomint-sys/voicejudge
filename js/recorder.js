@@ -1,30 +1,15 @@
 /*
- * MicRecorder — マイク入力を PCM のまま録音する
+ * MicRecorder — マイク入力を録音する
  * （エコーキャンセル・ノイズ抑制・自動ゲインはスペクトルを歪めるので無効化）
  *
- * Bluetooth 対策:
- *   - 対応ブラウザ（Chrome / Edge）では MediaStreamTrackProcessor で録音し、AudioContext を開かない。
- *     録音中に出力デバイスを掴まないので、通話モードに巻き込まれる範囲を小さくできる。
- *   - 非対応ブラウザでは AudioContext + AudioWorklet を使い、終了時に必ず閉じる。
- *   - 入力デバイスを選べるようにし、Bluetooth のマイクかどうかを呼び出し側が判断できるようにする。
+ * スマホ対策: 録音中に AudioContext（出力デバイス）を開かない。
+ *   開くと Android では通話モード（Bluetooth SCO）、iOS では play-and-record セッションになり、
+ *   録音を終えてもメディア音声が戻らないことがあるため。
+ *   - Chrome / Edge / Android: MediaStreamTrackProcessor で PCM を直接読む（音量メーターも作れる）
+ *   - Safari / Firefox: MediaRecorder で録音し、停止後に OfflineAudioContext でデコードする
  */
 (function (root) {
   'use strict';
-
-  const WORKLET_SOURCE = `
-    class CaptureProcessor extends AudioWorkletProcessor {
-      process(inputs) {
-        const input = inputs[0];
-        if (input && input.length) {
-          const out = new Float32Array(input[0].length);
-          for (const ch of input) for (let i = 0; i < out.length; i++) out[i] += ch[i] / input.length;
-          this.port.postMessage(out, [out.buffer]);
-        }
-        return true;
-      }
-    }
-    registerProcessor('capture-processor', CaptureProcessor);
-  `;
 
   const BLUETOOTH_LABEL = /hands[\s-]?free|bluetooth|ヘッドセット|ハンズフリー/i;
 
@@ -37,20 +22,27 @@
     }
   }
 
+  function pickMimeType() {
+    if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+    for (const type of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']) {
+      if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+    return '';
+  }
+
   class MicRecorder {
     constructor() {
-      this.ctx = null;
       this.chunks = [];
       this.length = 0;
-      this.nodes = [];
       this.stream = null;
       this.track = null;
       this.reader = null;
-      this.analyser = null;
-      this.levelBuffer = null;
+      this.mediaRecorder = null;
+      this.blobParts = [];
       this.levelDb = -Infinity;
       this.sampleRate = 48000;
       this.label = '';
+      this.hasLevel = false;
     }
 
     static isBluetooth(label) {
@@ -64,8 +56,16 @@
       return devices.filter((d) => d.kind === 'audioinput');
     }
 
+    static setAudioSession(type) {
+      setAudioSession(type);
+    }
+
     get bluetooth() {
       return MicRecorder.isBluetooth(this.label);
+    }
+
+    get elapsed() {
+      return (performance.now() - this.startedAt) / 1000;
     }
 
     async start(deviceId) {
@@ -79,14 +79,15 @@
       this.sampleRate = settings.sampleRate || 48000;
 
       if (root.MediaStreamTrackProcessor) this.startProcessorCapture();
-      else await this.startContextCapture();
+      else this.startMediaRecorderCapture();
       this.startedAt = performance.now();
     }
 
-    // AudioContext を開かずに録音する（出力デバイスを掴まない）
+    // PCM を直接読む（AudioContext もエンコードも不要）
     startProcessorCapture() {
       const processor = new root.MediaStreamTrackProcessor({ track: this.track });
       this.reader = processor.readable.getReader();
+      this.hasLevel = true;
       const pump = async () => {
         while (this.reader) {
           let result;
@@ -111,100 +112,77 @@
           }
           this.sampleRate = data.sampleRate || this.sampleRate;
           data.close();
-          this.push(chunk);
-          this.updateLevel(chunk);
+          this.chunks.push(chunk);
+          this.length += chunk.length;
+          let sum = 0;
+          for (let i = 0; i < chunk.length; i++) sum += chunk[i] * chunk[i];
+          this.levelDb = 10 * Math.log10(sum / chunk.length + 1e-12);
         }
       };
       pump();
     }
 
-    // 旧来の方法（Safari / Firefox）。終了時に必ずコンテキストを閉じる
-    async startContextCapture() {
-      const ctx = new (root.AudioContext || root.webkitAudioContext)();
-      this.ctx = ctx;
-      await ctx.resume();
-      const source = ctx.createMediaStreamSource(this.stream);
-      const mute = ctx.createGain();
-      mute.gain.value = 0;
-      mute.connect(ctx.destination);
-
-      this.analyser = ctx.createAnalyser();
-      this.analyser.fftSize = 2048;
-      this.levelBuffer = new Float32Array(this.analyser.fftSize);
-      source.connect(this.analyser);
-
-      let capture;
-      try {
-        if (!ctx.audioWorklet) throw new Error('AudioWorklet unsupported');
-        const url = URL.createObjectURL(new Blob([WORKLET_SOURCE], { type: 'application/javascript' }));
-        try {
-          await ctx.audioWorklet.addModule(url);
-        } finally {
-          URL.revokeObjectURL(url);
-        }
-        capture = new AudioWorkletNode(ctx, 'capture-processor');
-        capture.port.onmessage = (e) => this.push(e.data);
-      } catch (err) {
-        capture = ctx.createScriptProcessor(4096, 2, 1);
-        capture.onaudioprocess = (e) => {
-          const input = e.inputBuffer;
-          const out = new Float32Array(input.length);
-          for (let c = 0; c < input.numberOfChannels; c++) {
-            const ch = input.getChannelData(c);
-            for (let i = 0; i < out.length; i++) out[i] += ch[i] / input.numberOfChannels;
-          }
-          this.push(out);
-        };
-      }
-      source.connect(capture);
-      capture.connect(mute);
-      this.nodes = [source, capture, mute, this.analyser];
+    // 圧縮したまま録り、停止後にデコードする（Safari / Firefox。音量メーターは出せない）
+    startMediaRecorderCapture() {
+      const mimeType = pickMimeType();
+      this.mediaRecorder = mimeType ? new MediaRecorder(this.stream, { mimeType }) : new MediaRecorder(this.stream);
+      this.blobParts = [];
+      this.hasLevel = false;
+      this.mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size) this.blobParts.push(e.data);
+      };
+      this.mediaRecorder.start();
     }
 
-    push(chunk) {
-      this.chunks.push(chunk);
-      this.length += chunk.length;
-    }
-
-    updateLevel(chunk) {
-      let sum = 0;
-      for (let i = 0; i < chunk.length; i++) sum += chunk[i] * chunk[i];
-      this.levelDb = 10 * Math.log10(sum / chunk.length + 1e-12);
-    }
-
-    get elapsed() {
-      return (performance.now() - this.startedAt) / 1000;
-    }
-
-    // 現在の入力レベル [dBFS]
+    // 現在の入力レベル [dBFS]（MediaRecorder では取得できない）
     level() {
-      if (this.analyser) {
-        this.analyser.getFloatTimeDomainData(this.levelBuffer);
-        let sum = 0;
-        for (const v of this.levelBuffer) sum += v * v;
-        return 10 * Math.log10(sum / this.levelBuffer.length + 1e-12);
-      }
       return this.levelDb;
     }
 
-    // 録音を終了してマイクとコンテキストを解放し、モノラルの AudioBuffer を返す（何も録れていなければ null）
-    stop() {
-      const sampleRate = this.ctx ? this.ctx.sampleRate : this.sampleRate;
+    // 録音を終了してマイクを解放し、モノラルの AudioBuffer を返す（何も録れていなければ null）
+    async stop() {
       let buffer = null;
-      if (this.length > 0) {
-        buffer = this.ctx
-          ? this.ctx.createBuffer(1, this.length, sampleRate)
-          : new AudioBuffer({ length: this.length, numberOfChannels: 1, sampleRate });
-        const data = buffer.getChannelData(0);
-        let offset = 0;
-        for (const chunk of this.chunks) {
-          data.set(chunk, offset);
-          offset += chunk.length;
-        }
+      try {
+        buffer = this.mediaRecorder ? await this.stopMediaRecorder() : this.buildBuffer();
+      } catch (_) {
+        buffer = null;
+      } finally {
+        this.release();
+      }
+      return buffer;
+    }
+
+    buildBuffer() {
+      if (!this.length) return null;
+      const buffer = new AudioBuffer({ length: this.length, numberOfChannels: 1, sampleRate: this.sampleRate });
+      const data = buffer.getChannelData(0);
+      let offset = 0;
+      for (const chunk of this.chunks) {
+        data.set(chunk, offset);
+        offset += chunk.length;
       }
       this.chunks = [];
-      this.release();
       return buffer;
+    }
+
+    stopMediaRecorder() {
+      return new Promise((resolve) => {
+        const rec = this.mediaRecorder;
+        const finish = async () => {
+          try {
+            const blob = new Blob(this.blobParts, { type: rec.mimeType || 'audio/webm' });
+            this.blobParts = [];
+            if (!blob.size) return resolve(null);
+            const Offline = root.OfflineAudioContext || root.webkitOfflineAudioContext;
+            resolve(await new Offline(1, 1, 44100).decodeAudioData(await blob.arrayBuffer()));
+          } catch (_) {
+            resolve(null);
+          }
+        };
+        rec.onstop = finish;
+        if (rec.state !== 'inactive') rec.stop();
+        else finish();
+      });
     }
 
     release() {
@@ -213,15 +191,19 @@
         this.reader = null;
         reader.cancel().catch(() => {});
       }
-      for (const node of this.nodes) node.disconnect();
-      this.nodes = [];
-      this.analyser = null;
+      if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+        try {
+          this.mediaRecorder.stop();
+        } catch (_) {
+          /* already stopped */
+        }
+      }
+      this.mediaRecorder = null;
       if (this.stream) this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
       this.track = null;
-      if (this.ctx && this.ctx.state !== 'closed') this.ctx.close().catch(() => {});
-      this.ctx = null;
-      setAudioSession('auto');
+      // iOS: 録音用セッションのままだと音が受話口側に回るため、再生側に戻す
+      setAudioSession('playback');
     }
   }
 

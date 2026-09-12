@@ -37,7 +37,7 @@
           <select id="micSelect" class="mic-select"></select>
         </div>
         <div id="recStatus" class="rec-status" hidden>
-          <div class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
+          <div id="meter" class="meter" aria-hidden="true"><div id="meterFill" class="meter-fill"></div></div>
           <span id="recTime" class="rec-time">0.0 秒</span>
         </div>
         <p id="message" class="message" role="status" hidden></p>
@@ -117,6 +117,8 @@
       </div>
     </section>
   </main>
+
+  <audio id="player" class="visually-hidden" preload="auto" playsinline></audio>
 
   <script src="js/analyzer.js"></script>
   <script src="js/spectrogram.js"></script>

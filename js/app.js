@@ -15,6 +15,8 @@
     fileInput: $('fileInput'),
     micRow: $('micRow'),
     micSelect: $('micSelect'),
+    meter: $('meter'),
+    player: $('player'),
     recStatus: $('recStatus'),
     meterFill: $('meterFill'),
     recTime: $('recTime'),
@@ -47,7 +49,7 @@
 
   let recorder = null;
   let meterRaf = 0;
-  let playbackBuffer = null;
+  let playbackUrl = '';
   let playing = null;
   let busy = false;
   let micChoice = '';
@@ -57,6 +59,38 @@
   function decodeAudio(data) {
     const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     return new Offline(1, 1, 44100).decodeAudioData(data);
+  }
+
+  // 録音した音声を <audio> で再生できるよう WAV にする
+  function wavUrl(buffer) {
+    const channel = buffer.getChannelData(0);
+    const bytes = new DataView(new ArrayBuffer(44 + channel.length * 2));
+    const text = (offset, value) => {
+      for (let i = 0; i < value.length; i++) bytes.setUint8(offset + i, value.charCodeAt(i));
+    };
+    text(0, 'RIFF');
+    bytes.setUint32(4, 36 + channel.length * 2, true);
+    text(8, 'WAVEfmt ');
+    bytes.setUint32(16, 16, true);
+    bytes.setUint16(20, 1, true);
+    bytes.setUint16(22, 1, true);
+    bytes.setUint32(24, buffer.sampleRate, true);
+    bytes.setUint32(28, buffer.sampleRate * 2, true);
+    bytes.setUint16(32, 2, true);
+    bytes.setUint16(34, 16, true);
+    text(36, 'data');
+    bytes.setUint32(40, channel.length * 2, true);
+    for (let i = 0; i < channel.length; i++) {
+      const v = Math.max(-1, Math.min(1, channel[i]));
+      bytes.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+    }
+    return URL.createObjectURL(new Blob([bytes.buffer], { type: 'audio/wav' }));
+  }
+
+  function setPlaybackUrl(url) {
+    if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+    playbackUrl = url || '';
+    els.player.src = playbackUrl;
   }
 
   function showMessage(text, kind) {
@@ -89,7 +123,7 @@
     return rendered.getChannelData(0);
   }
 
-  async function analyzeBuffer(buffer) {
+  async function analyzeBuffer(buffer, url) {
     stopPlayback();
     setBusy(true);
     showMessage('解析中…');
@@ -97,7 +131,7 @@
     try {
       const samples = await toMonoSamples(buffer);
       const result = VoiceAnalyzer.analyze(samples, TARGET_SAMPLE_RATE);
-      playbackBuffer = buffer;
+      setPlaybackUrl(url);
       showResult(result);
       const notes = [];
       if (recordingNote) {
@@ -198,6 +232,7 @@
     els.fileBtn.classList.add('disabled');
     els.fileInput.disabled = true;
     els.recStatus.hidden = false;
+    els.meter.hidden = !rec.hasLevel;
     refreshMicList();
     if (rec.bluetooth) {
       showMessage('Bluetooth のマイクで録音しています。通話モードに切り替わるため音質が下がり、録音後に他の音が出なくなることがあります。マイクの選択欄で本体のマイクを選ぶと避けられます。');
@@ -214,25 +249,25 @@
     tick();
   }
 
-  function finishRecording() {
+  async function finishRecording() {
     cancelAnimationFrame(meterRaf);
-    const usedBluetooth = recorder.bluetooth;
-    const buffer = recorder.stop();
-    recordingNote = usedBluetooth
-      ? 'Bluetooth のマイクで録音しました。録音後に音が聞こえない場合は、イヤホンを接続し直すか、Windows の再生デバイスを選び直してください。'
-      : '';
+    const rec = recorder;
     recorder = null;
+    recordingNote = rec.bluetooth
+      ? 'Bluetooth のマイクで録音しました。このあと音が聞こえない場合は、イヤホンを一度切断して接続し直すか、マイクの選択欄で本体のマイクを選んでください。'
+      : '';
     els.recordBtn.classList.remove('recording');
     els.recordLabel.textContent = '録音';
     els.fileBtn.classList.remove('disabled');
     els.fileInput.disabled = false;
     els.recStatus.hidden = true;
     els.meterFill.style.width = '0%';
+    const buffer = await rec.stop();
     if (!buffer || buffer.duration < 0.3) {
       showMessage('録音が短すぎます。もう一度お試しください。', 'error');
       return;
     }
-    analyzeBuffer(buffer);
+    analyzeBuffer(buffer, wavUrl(buffer));
   }
 
   els.recordBtn.addEventListener('click', () => {
@@ -249,7 +284,7 @@
     try {
       const data = await file.arrayBuffer();
       const buffer = await decodeAudio(data);
-      await analyzeBuffer(buffer);
+      await analyzeBuffer(buffer, URL.createObjectURL(file));
     } catch (err) {
       console.error(err);
       showMessage(`「${file.name}」は音声ファイルとして読み込めませんでした。`, 'error');
@@ -284,24 +319,21 @@
   // ------------------------------------------------------------ playback
 
   function startPlayback() {
-    if (!playbackBuffer || !view.result) return;
-    // 再生のたびにコンテキストを作り、終わったら閉じる
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    ctx.resume();
-    const source = ctx.createBufferSource();
-    source.buffer = playbackBuffer;
-    source.connect(ctx.destination);
-    const duration = view.result.duration;
-    const startedAt = ctx.currentTime;
-    source.start(0, 0, duration);
-    source.onended = () => {
-      if (playing && playing.source === source) stopPlayback();
-    };
-    playing = { ctx, source, raf: 0 };
+    if (!playbackUrl || !view.result) return;
+    // iOS: 録音用セッションのままだと音が受話口側に回るため、再生側に戻す
+    MicRecorder.setAudioSession('playback');
+    els.player.currentTime = 0;
+    const started = els.player.play();
+    if (started && started.catch) started.catch(() => stopPlayback());
+    playing = { raf: 0 };
     els.playBtn.textContent = '■ 停止';
     const tick = () => {
-      if (!playing || playing.source !== source) return;
-      view.setPlayhead(Math.min(duration, ctx.currentTime - startedAt));
+      if (!playing) return;
+      if (els.player.currentTime >= view.result.duration) {
+        stopPlayback();
+        return;
+      }
+      view.setPlayhead(els.player.currentTime);
       playing.raf = requestAnimationFrame(tick);
     };
     tick();
@@ -309,19 +341,19 @@
 
   function stopPlayback() {
     if (!playing) return;
-    const { ctx, source, raf } = playing;
+    cancelAnimationFrame(playing.raf);
     playing = null;
-    source.onended = null;
+    els.player.pause();
     try {
-      source.stop();
+      els.player.currentTime = 0;
     } catch (_) {
-      /* already stopped */
+      /* まだ読み込めていない */
     }
-    cancelAnimationFrame(raf);
-    ctx.close().catch(() => {});
     view.setPlayhead(null);
     els.playBtn.textContent = '▶ 再生';
   }
+
+  els.player.addEventListener('ended', () => stopPlayback());
 
   els.playBtn.addEventListener('click', () => (playing ? stopPlayback() : startPlayback()));
 
